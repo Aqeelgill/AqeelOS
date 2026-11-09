@@ -1,0 +1,129 @@
+<!DOCTYPE html><html lang="en" data-theme="dark"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Owner Control Panel | AqeelOS</title>
+<link rel="stylesheet" href="/static/vendor/fonts/inter.css"><link rel="stylesheet" href="/static/css/base.css">
+<style>
+.oc-nav{display:flex;gap:6px;margin-bottom:4px;flex-wrap:wrap}
+.oc-nav .nav-item{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text-secondary);font-size:13px;cursor:pointer;transition:var(--transition)}
+.oc-nav .nav-item.active{background:rgba(56,189,248,.1);color:var(--accent);border-color:rgba(56,189,248,.3)}
+.oc-section{display:none}
+.oc-section.active{display:block;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.status-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:20px}
+.status-card{padding:16px;border-radius:var(--radius);background:var(--card);border:1px solid var(--border)}
+.status-card .s-label{font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px}
+.status-card .s-value{font-size:26px;font-weight:800}
+.status-card .s-value.up{color:var(--ok)}.status-card .s-value.down{color:var(--bad)}.status-card .s-value.neutral{color:var(--text)}
+.kpi-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpi{padding:18px;border-radius:var(--radius-lg);background:var(--card);border:1px solid var(--border)}
+.kpi .k-label{font-size:12px;color:var(--text-secondary);font-weight:700;text-transform:uppercase;margin-bottom:6px}
+.kpi .k-value{font-size:30px;font-weight:900;letter-spacing:-0.02em}
+.kpi .k-sub{font-size:12px;color:var(--muted);margin-top:4px}
+.hero-owner{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:24px}
+.control-banner{padding:16px 20px;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:20px;background:var(--card2)}
+.control-banner.paused{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.05)}
+.control-banner.running{border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.05)}
+.banner-title{font-size:15px;font-weight:800;margin:0 0 6px}
+.banner-desc{font-size:13px;color:var(--text-secondary);margin:0}
+.btn-group{display:flex;gap:8px;flex-wrap:wrap}
+.toast-container{position:fixed;bottom:24px;right:24px;z-index:100;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--card);border:1px solid var(--border);color:var(--text);padding:12px 16px;border-radius:var(--radius);box-shadow:var(--shadow);pointer-events:auto;min-width:280px;animation:slideIn .35s ease;display:flex;justify-content:space-between;align-items:flex-start}
+.toast .toast-body{font-size:13px;line-height:1.4}
+.toast .toast-close{background:transparent;border:none;color:var(--text-secondary);cursor:pointer;font-size:16px;padding:0 4px}
+.toast .toast-close:hover{color:var(--text)}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+@media(max-width:900px){.status-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.kpi-row{grid-template-columns:1fr}}
+@media(max-width:600px){.status-grid{grid-template-columns:1fr}}
+</style></head>
+<body><div class="topbar"><div style="display:flex;align-items:center;gap:12px"><div style="width:8px;height:8px;background:var(--ok);border-radius:50%;box-shadow:0 0 8px var(--ok)"></div><div><div style="font-size:15px;font-weight:800">AqeelOS</div><div class="muted" style="font-size:12px">Owner Control Panel</div></div></div><div style="display:flex;gap:8px;align-items:center"><span id="execState" class="status-pill paused">Checking…</span><button class="btn" onclick="UI.toggleTheme()" title="Theme">Theme</button><button class="btn" onclick="loadAll(true)" title="Refresh">Refresh</button><a class="btn" href="/ceo" title="CEO Console">CEO Console</a><button class="btn" onclick="logout()">Logout</button></div></div>
+<div class="container"><div id="gate" class="card" style="max-width:520px;padding:32px"><div style="font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);margin-bottom:8px">Owner Access</div><h2 style="margin:0 0 12px;font-size:22px">Unlock Control Panel</h2><p class="muted" style="margin-bottom:20px">Only the Owner account may access centralized control. Backend authorization is enforced for all control APIs.</p><input id="pw" class="input" type="password" placeholder="Owner password"><button class="btn primary" style="margin-top:12px;width:100%" onclick="unlock()">Unlock Owner Control</button><div id="gmsg" class="muted" style="margin-top:10px"></div></div>
+<div id="app" class="hidden" style="display:flex;flex-direction:column;gap:24px"><div class="hero-owner"><div><div style="font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);margin-bottom:4px">Centralized Control</div><h1 style="margin:0;font-size:24px;font-weight:900">Owner Dashboard</h1><p class="muted" style="margin-top:6px">Agents, departments, task queue, CEO Bot, Support, users, roles, settings, LLM provider, logs, errors, execution history, and artifacts.</p></div><div class="btn-group"><button class="btn danger" onclick="emergencyPause()" title="Emergency Stop">⏹ Emergency STOP / PAUSE</button><button class="btn ok" onclick="resumeExec()" title="Resume Execution">▶ RESUME</button></div></div>
+<div id="controlBanner" class="control-banner paused"><h3 class="banner-title" id="bannerTitle">Execution is paused</h3><p class="banner-desc" id="bannerDesc">Workers will not pick up queued tasks until you click RESUME.</p></div>
+<div class="status-grid" id="statusGrid"></div>
+<div class="kpi-row" id="kpiRow"></div>
+<div class="oc-nav" style="margin-bottom:16px">
+  <div class="nav-item active" onclick="showSection('queue','Queue')">📋 Queue</div>
+  <div class="nav-item" onclick="showSection('agents','Agents')">🤖 Agents</div>
+  <div class="nav-item" onclick="showSection('system','System')">⚙️ System</div>
+  <div class="nav-item" onclick="showSection('users','Users')">👥 Users</div>
+  <div class="nav-item" onclick="showSection('tickets','Support')">🎫 Support</div>
+  <div class="nav-item" onclick="showSection('ceo','CEO Bot')">💬 CEO Bot</div>
+  <div class="nav-item" onclick="showSection('artifacts','Artifacts')">📁 Artifacts</div>
+  <div class="nav-item" onclick="showSection('errors','Errors')">⚠️ Errors</div>
+  <div class="nav-item" onclick="showSection('history','History')">📜 History</div>
+  <div class="nav-item" onclick="showSection('audit','Audit')">📋 Audit</div>
+</div>
+<section id="sec-queue" class="oc-section active"><div class="card"><div style="overflow:auto"><table class="table"><thead><tr><th>ID</th><th>Agent</th><th>Client</th><th>Source</th><th>Status</th><th>Stage</th><th>Task</th><th>Updated</th><th>Action</th></tr></thead><tbody id="queueBody"></tbody></table></div></div></section>
+<section id="sec-agents" class="oc-section"><div class="card"><div style="overflow:auto"><table class="table"><thead><tr><th>Agent</th><th>Dept</th><th>Visibility</th><th>Status</th><th>Done / Fail</th><th>Current Task</th><th>Action</th></tr></thead><tbody id="agentsBody"></tbody></table></div></div></section>
+<section id="sec-system" class="oc-section"><div class="grid grid-2"><div class="card"><h3 class="section-title">LLM Provider &amp; Settings</h3><div class="form-group"><label class="form-label">Provider</label><select id="llmProvider" class="input"><option value="ollama">Ollama (local)</option><option value="groq">Groq API (online)</option></select></div><div class="form-group" style="margin-top:12px"><label class="form-label">Groq API Key</label><input id="groqKey" class="input" type="password" placeholder="sk-...">
+<p class="muted" style="font-size:12px;margin-top:4px">Set via GROQ_API_KEY env var for production.</p></div><div class="form-group" style="margin-top:12px"><label class="form-label">Groq Model</label><input id="groqModel" class="input" placeholder="llama-3.3-70b-versatile"></div><button class="btn primary" onclick="saveLLMSettings()">Save LLM Settings</button><div id="llmMsg" class="muted" style="margin-top:8px"></div></div>
+<div class="card"><h3 class="section-title">Ollama / Groq Health</h3><div id="llmHealth" style="padding:16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card2)">Checking…</div></div></div>
+<div class="card"><h3 class="section-title">System Settings</h3><div class="grid grid-3" style="gap:12px"><div class="form-group"><label class="form-label">Company</label><input id="company" class="input"></div><div class="form-group"><label class="form-label">Owner Name</label><input id="ownerName" class="input"></div><div class="form-group"><label class="form-label">Working Hours</label><input id="workingHours" class="input"></div></div><div class="form-group" style="margin-top:12px"><label class="form-label">New CEO Password (optional)</label><input id="ceoPw" class="input" type="password"></div><div class="form-group" style="margin-top:12px"><label class="form-label">New Owner Password (optional)</label><input id="ownerPw" class="input" type="password"></div><button class="btn primary" onclick="saveSettings()">Save Settings</button><div id="setMsg" class="muted" style="margin-top:8px"></div></div></div></section>
+<section id="sec-users" class="oc-section"><div class="card"><div style="overflow:auto"><table class="table"><thead><tr><th>ID</th><th>Name / Email</th><th>Role</th><th>Last Login</th><th>Set Role</th></tr></thead><tbody id="usersBody"></tbody></table></div></div></section>
+<section id="sec-tickets" class="oc-section"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px"><h3 class="section-title" style="margin:0">Support Escalation Inbox</h3><button class="btn" onclick="loadAll()">Refresh</button></div><div id="ticketsList" style="margin-bottom:16px"></div><h4 id="threadTitle" class="section-title" style="margin:16px 0 6px">Ticket Thread</h4><div id="threadMeta" class="muted" style="margin-bottom:10px">Select a ticket to view history.</div><div id="thread" class="thread"></div><textarea id="ticketReply" class="input" rows="3" style="margin-top:10px" placeholder="Owner response to client…"></textarea><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn primary" onclick="respondTicket()">Send Response</button><button class="btn" onclick="closeTicket()">Close Ticket</button></div><div id="tmsg" class="muted" style="margin-top:8px"></div></div></section>
+<section id="sec-ceo" class="oc-section"><div class="card"><div style="overflow:auto"><table class="table"><thead><tr><th>ID</th><th>Client</th><th>Status</th><th>Updated</th><th>Pending Route</th></tr></thead><tbody id="ceoBody"></tbody></table></div></div></section>
+<section id="sec-artifacts" class="oc-section"><div class="card"><div style="overflow:auto"><table class="table"><thead><tr><th>ID</th><th>Task</th><th>Agent</th><th>Kind</th><th>File</th><th>Created</th><th>Download</th></tr></thead><tbody id="artifactsBody"></tbody></table></div></div></section>
+<section id="sec-errors" class="oc-section"><div class="card"><div style="overflow:auto"><table class="table"><thead><tr><th>Time</th><th>Agent</th><th>Action</th><th>Level</th><th>Details</th></tr></thead><tbody id="errorsBody"></tbody></table></div></div></section>
+<section id="sec-history" class="oc-section"><div class="card"><div style="overflow:auto"><table class="table"><thead><tr><th>Run</th><th>Task</th><th>Agent</th><th>Status</th><th>Stage</th><th>Detail</th><th>Started</th><th>Finished</th></tr></thead><tbody id="historyBody"></tbody></table></div></div></section>
+<section id="sec-audit" class="oc-section"><div class="card"><div style="overflow:auto"><table class="table"><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Details</th></tr></thead><tbody id="auditBody"></tbody></table></div></div></section>
+</div></div>
+<script src="/static/js/api.js"></script><script>
+const S={data:null,selectedTicket:null,poll:null,toasts:[]};
+function esc(v){return UI.esc(v==null?'':v)}
+function fmt(v){return UI.fmt(v)}
+function toast(msg,type='info'){const el=document.createElement('div');el.className='toast';el.innerHTML=`<div class="toast-body">${esc(msg)}</div><button class="toast-close" onclick="this.parentElement.remove()">×</button>`;document.body.appendChild(el);setTimeout(()=>el.remove(),5000)}
+async function unlock(){gmsg.textContent='Checking...';try{await API.post('/api/auth/owner',{password:pw.value});await boot();}catch(e){gmsg.textContent=e.message||'Access denied';}}
+async function boot(){try{const me=await API.get('/api/me');if(me.role!=='owner'){gate.classList.remove('hidden');app.classList.add('hidden');gmsg.textContent='Owner access required.';return;}gate.classList.add('hidden');app.style.display='flex';await loadAll();if(S.poll)clearInterval(S.poll);S.poll=setInterval(()=>loadAll().catch(()=>{}),5000);}catch(e){gmsg.textContent=e.message;}}
+async function loadAll(manual){try{const d=await API.get('/api/owner/control');S.data=d;render(d);lastSync.textContent='Updated '+new Date().toLocaleTimeString();}catch(e){if(e.status===401){gate.classList.remove('hidden');app.style.display='none';gmsg.textContent='Owner session required.';}else toast(e.message||'Load failed','error');}}
+function showSection(id,name){document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));event.currentTarget.classList.add('active');document.querySelectorAll('.oc-section').forEach(s=>s.classList.remove('active'));document.getElementById('sec-'+id).classList.add('active');}
+function render(d){const st=d.status||{},t=st.tasks||{},a=st.agents||{},llm=st.llm||{};
+  execState.textContent=st.paused?'PAUSED / STOPPED':'RUNNING';
+  execState.className='status-pill '+(st.paused?'paused':'running');
+  const banner=document.getElementById('controlBanner');const bt=document.getElementById('bannerTitle');const bd=document.getElementById('bannerDesc');
+  banner.className='control-banner '+(st.paused?'paused':'running');
+  bt.textContent=st.paused?'Execution is paused':'Execution is running';
+  bd.textContent=st.paused?'Workers will not pick up queued tasks until you click RESUME. '+(st.pause_reason||'')+'Workers may claim queued tasks. Use Emergency STOP/PAUSE to halt new task pickup immediately.';
+  statusGrid.innerHTML=[
+    ['Active Agents',a.busy||0,'neutral'],
+    ['Queued',t.queued||0,'neutral'],
+    ['Processing',t.processing||0,'neutral'],
+    ['Completed',t.completed||0,'up'],
+    ['Failed',t.failed||0,'down'],
+    ['Paused / Cancelled',(t.paused||0)+(t.cancelled||0),'neutral']
+  ].map(([lab,val,cls])=>`<div class="status-card"><div class="s-label">${esc(lab)}</div><div class="s-value ${cls}">${esc(val)}</div></div>`).join('');
+  kpiRow.innerHTML=[
+    ['Total Tasks',t.total||0,'All task records'],
+    ['Success Rate',st.success_rate||100,'Completed / (completed + failed)'],
+    ['Agents Online',a.online||0,'Available for work'],
+    ['Agents Offline',a.offline||0,'Disabled by owner'],
+  ].map(([lab,val,sub])=>`<div class="kpi"><div class="k-label">${esc(lab)}</div><div class="k-value">${esc(val)}</div><div class="k-sub">${esc(sub)}</div></div>`).join('');
+  queueBody.innerHTML=(d.queue||[]).map(q=>`<tr><td>#${q.id}</td><td>${esc(q.agent_id)}</td><td>${esc(q.client_id||'—')}</td><td class="mono">${esc(q.source||'')}</td><td><span class="badge ${esc(q.status)}">${esc(q.status)}</span></td><td class="mono">${esc(q.stage||'')}</td><td style="max-width:300px">${esc(q.task)}</td><td>${fmt(q.updated_at||q.created_at)}</td><td>${taskActions(q)}</td></tr>`).join('')||'<tr><td colspan="9" style="text-align:center" class="muted">No tasks.</td></tr>';
+  agentsBody.innerHTML=(d.agents||[]).map(x=>`<tr><td><strong>${esc(x.name)}</strong><div class="mono" style="font-size:11px">${esc(x.id)}</div></td><td>${esc(x.department_id)}</td><td><span class="badge ${x.visibility==='internal'?'warn':'info'}">${esc(x.visibility)}</span></td><td><span class="badge ${esc(x.status)}">${esc(x.status)}</span></td><td>${x.tasks_completed||0}/${x.tasks_failed||0}</td><td class="mono" style="max-width:200px">${esc(x.current_task||'')}</td><td><button class="btn small" onclick="toggleAgent('${esc(x.id)}')">${x.status==='offline'?'Enable':'Disable'}</button></td></tr>`).join('');
+  const cfg=d.config||{};llmHealth.innerHTML=`
+    <div class="form-group"><label class="form-label">Provider</label><div class="muted">${esc(cfg.llm_provider||'—')}</div></div>
+    <div class="form-group"><label class="form-label">Status</label><span class="badge ${ol.ok?'reachable':'unreachable'}">${ol.ok?'Reachable':'Unreachable'}</span>${ol.error?' <span class="muted" style="font-size:12px">'+esc(ol.error)+'</span>':''}</div>
+    <div class="form-group"><label class="form-label">Ollama Model</label><div class="mono" style="font-size:12px">${esc(cfg.ollama_model||'qwen2.5-coder:3b')}</div></div>
+    <div class="form-group"><label class="form-label">Groq Model</label><div class="mono" style="font-size:12px">${esc(cfg.groq_model||'llama-3.3-70b-versatile')}</div></div>
+    <div class="form-group"><label class="form-label">Groq Configured</label><span class="badge ${cfg.groq_configured?'reachable':'unreachable'}">${cfg.groq_configured?'Yes':'No'}</span></div>`;
+  usersBody.innerHTML=(d.users||[]).map(u=>`<tr><td>#${u.id}</td><td><strong>${esc(u.name||'')}</strong><div class="mono" style="font-size:11px">${esc(u.email)}</div></td><td><span class="badge ${u.role==='owner'?'warn':u.role==='ceo'?'info':'success'}">${esc(u.role)}</span></td><td>${fmt(u.last_login)}</td><td><select class="input" style="min-width:140px" onchange="setRole(${u.id},this.value)"><option value="">Set role…</option><option value="client">client</option><option value="ceo">ceo</option><option value="owner">owner</option></select></td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center" class="muted">No users.</td></tr>';
+  ceoBody.innerHTML=(d.ceo_conversations||[]).map(c=>`<tr><td>#${c.id}</td><td>${esc(c.client_name||c.client_id||'')}<div class="mono" style="font-size:11px">${esc(c.client_email||'')}</div></td><td><span class="badge ${esc(c.status)}">${esc(c.status)}</span></td><td>${fmt(c.updated_at)}</td><td class="mono" style="max-width:180px">${esc((c.pending_route||'').slice(0,100))}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center" class="muted">No CEO conversations.</td></tr>';
+  ticketsList.innerHTML=(d.tickets||[]).map(t=>`<div class="list-item ticket-row ${S.selectedTicket==t.id?'active':''}" onclick="openTicket(${t.id})"><div class="muted" style="font-size:12px">#${t.id} · <span class="badge ${esc(t.status)}">${esc(t.status)}</span> · ${fmt(t.updated_at||t.created_at)}</div><div><strong>${esc(t.subject)}</strong></div><div class="muted" style="font-size:12px">${esc((t.client_name||'')+(t.client_email?' <'+t.client_email+'>':''))}</div><div class="muted" style="font-size:12px">${esc((t.last_message||'').slice(0,140))}</div></div>`).join('')||'<div style="padding:12px;color:var(--text-secondary)">No escalations.</div>';
+  errorsBody.innerHTML=(d.errors||[]).map(e=>`<tr><td>${fmt(e.timestamp)}</td><td>${esc(e.agent_id||'')}</td><td>${esc(e.action)}</td><td><span class="badge ${esc(e.level||'error')}">${esc(e.level||'error')}</span></td><td>${esc(e.details)}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center" class="muted">No errors logged.</td></tr>';
+  historyBody.innerHTML=(d.history||[]).map(h=>`<tr><td>#${h.id}</td><td>#${h.task_id}</td><td>${esc(h.agent_id)}</td><td><span class="badge ${esc(h.status)}">${esc(h.status)}</span></td><td>${esc(h.stage||'')}</td><td>${esc(h.detail||'')}</td><td>${fmt(h.started_at)}</td><td>${fmt(h.finished_at)}</td></tr>`).join('');
+  artifactsBody.innerHTML=(d.artifacts||[]).map(a=>`<tr><td>#${a.id}</td><td>#${a.task_id}<span class="muted" style="font-size:11px"> ${esc(a.task_status||'')}</span></td><td>${esc(a.agent_id||'')}</td><td>${esc(a.kind)}</td><td class="mono">${esc(a.filename)}</td><td>${fmt(a.created_at)}</td><td><a class="btn small" href="/api/artifacts/${a.id}/download" target="_blank" rel="noopener">Download</a></td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center" class="muted">No artifacts.</td></tr>';
+  auditBody.innerHTML=(d.audit_log||[]).map(a=>`<tr><td>${fmt(a.created_at)}</td><td>${esc(a.actor_role||'')}${a.actor_id?' #'+a.actor_id:''}</td><td class="mono">${esc(a.action)}</td><td>${esc(a.details)}</td></tr>`).join('');
+  if(d.settings){const by=Object.fromEntries((d.settings||[]).map(s=>[s.key,s.value]));company.value=by.company||'';ownerName.value=by.owner||'';workingHours.value=by.working_hours||'';groqModel.value=by.groq_model||'';}
+  thread.innerHTML='';threadMeta.textContent='Select a ticket.';
+}
+function taskActions(q){const id=q.id;if(q.status==='queued')return`<button class="btn small danger" onclick="taskAction(${id},'cancel')">Cancel</button>`;if(q.status==='processing')return`<button class="btn small warn" onclick="taskAction(${id},'cancel')">Pause</button>`;if(['paused','failed','cancelled'].includes(q.status))return`<button class="btn small ok" onclick="taskAction(${id},'requeue')">Requeue</button>`;return'<span class="muted">—</span>';}
+async function emergencyPause(){if(!confirm('Emergency STOP/PAUSE: halt new task pickup and safely pause processing tasks? Records are preserved.'))return;try{await API.post('/api/owner/control/pause',{reason:'Emergency STOP/PAUSE by owner'});await loadAll(true);toast('Execution paused');}catch(e){toast(e.message,'error');}}
+async function resumeExec(){try{await API.post('/api/owner/control/resume',{});await loadAll(true);toast('Execution resumed');}catch(e){toast(e.message,'error');}}
+async function taskAction(id,action){try{if(action==='cancel')await API.post('/api/owner/control/tasks/'+id+'/cancel',{});if(action==='requeue')await API.post('/api/owner/control/tasks/requeue',{task_ids:[id]});await loadAll(true);}catch(e){toast(e.message,'error');}}
+async function toggleAgent(id){try{await API.post('/api/owner/control/agents/'+id+'/toggle',{});await loadAll(true);}catch(e){toast(e.message,'error');}}
+async function setRole(userId,role){if(!role)return;if(!confirm(`Change user #${userId} to ${role}?`))return;try{await API.post('/api/owner/control/users/'+userId+'/role',{role});await loadAll(true);toast('Role updated');}catch(e){toast(e.message,'error');}}
+async function saveSettings(){setMsg.textContent='Saving...';try{await API.post('/api/settings',{company:company.value,owner:ownerName.value,working_hours:workingHours.value,ceo_password:ceoPw.value,owner_password:ownerPw.value});ceoPw.value='';ownerPw.value='';setMsg.textContent='Saved.';await loadAll(true);toast('Settings saved');}catch(e){setMsg.textContent=e.message;}}
+async function saveLLMSettings(){llmMsg.textContent='Saving...';try{await API.post('/api/settings',{llm_provider:llmProvider.value,groq_api_key:groqKey.value,groq_model:groqModel.value});groqKey.value='';llmMsg.textContent='Saved. Restart app to apply provider change.';await loadAll(true);toast('LLM settings saved');}catch(e){llmMsg.textContent=e.message;}}
+async function openTicket(id){S.selectedTicket=id;try{const d=await API.get('/api/support/tickets/'+id);const t=d.ticket||{};threadTitle.textContent='Ticket #'+t.id+' — '+(t.subject||'');threadMeta.textContent=`${t.status||''} · ${t.client_name||t.client_id||''}${t.client_email?' <'+t.client_email+'>':''} · ${fmt(t.updated_at||t.created_at)}`;thread.innerHTML=(d.messages||[]).map(m=>`<div class="tmsg ${esc(m.sender_role||'')}"><div class="muted" style="font-size:11px">${esc(m.sender_name||m.sender_role||'')} · ${fmt(m.created_at)}</div><div>${esc(m.body||'')}</div></div>`).join('')||'<div class="muted">No messages.</div>';thread.scrollTop=thread.scrollHeight;render(S.data||{});}catch(e){tmsg.textContent=e.message;}}
+async function respondTicket(){if(!S.selectedTicket){tmsg.textContent='Select a ticket first.';return;}try{await API.post('/api/support/tickets/'+S.selectedTicket+'/respond',{message:ticketReply.value});ticketReply.value='';tmsg.textContent='Sent.';await openTicket(S.selectedTicket);await loadAll();}catch(e){tmsg.textContent=e.message;}}
+async function closeTicket(){if(!S.selectedTicket){tmsg.textContent='Select a ticket first.';return;}try{await API.post('/api/support/tickets/'+S.selectedTicket+'/close',{});tmsg.textContent='Closed.';await openTicket(S.selectedTicket);await loadAll();}catch(e){tmsg.textContent=e.message;}}
+async function logout(){try{await API.post('/api/auth/logout',{});}catch(e){}location.href='/';}
+boot();
+</script></body></html>

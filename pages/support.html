@@ -1,0 +1,28 @@
+<!DOCTYPE html><html lang="en" data-theme="dark"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Support | AqeelOS</title>
+<link rel="stylesheet" href="/static/vendor/fonts/inter.css"><link rel="stylesheet" href="/static/css/base.css">
+<style>.thread{max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--card2)} .tmsg{margin:8px 0;padding:8px 10px;border-radius:10px;white-space:pre-wrap}.tmsg.client,.tmsg.User{background:rgba(245,158,11,.12)} .tmsg.owner,.tmsg.assistant{background:rgba(0,212,255,.10)} .ticket-row{cursor:pointer}.ticket-row.active{background:rgba(0,212,255,.08)}</style></head>
+<body><div class="topbar"><a class="btn" href="/">Home</a><div><a class="btn" href="/client">Client Portal</a><button class="btn" onclick="UI.toggleTheme()">Theme</button></div></div>
+<div class="container grid" style="gap:16px">
+  <div class="grid grid-2">
+    <div class="card" style="padding:18px"><h1 style="margin-top:0">Support Bot</h1><p class="muted">Ask about platform usage, privacy, terms, or request human help.</p>
+      <textarea id="q" class="input" rows="5" placeholder="Describe your issue..."></textarea>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" onclick="ask()">Ask Support Bot</button><button class="btn" onclick="escalate()">Request Human</button></div>
+      <div id="out" class="notice muted" style="margin-top:12px">Responses appear here.</div>
+    </div>
+    <div class="card" style="padding:18px"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">My Escalations</h2><button class="btn" onclick="loadTickets()">Refresh</button></div>
+      <div id="loginNote" class="muted" style="margin-top:8px"></div>
+      <div id="tickets" style="margin-top:10px"></div>
+      <div id="threadWrap" class="hidden" style="margin-top:12px"><h3 id="threadTitle" style="margin:0 0 6px">Thread</h3><div id="thread" class="thread"></div><textarea id="reply" class="input" rows="3" style="margin-top:8px" placeholder="Reply to owner..."></textarea><button class="btn primary" style="margin-top:8px" onclick="sendReply()">Send Reply</button></div>
+    </div>
+  </div>
+</div>
+<script src="/static/js/api.js"></script><script>
+let S={me:null,selected:null,rows:[]};
+async function init(){try{S.me=await API.get('/api/me');}catch(e){} loginNote.textContent=S.me&&S.me.role==='client'?'Viewing your tickets.':'Log in as a client to view and reply to your escalation tickets.'; if(S.me&&S.me.role==='client') loadTickets();}
+async function ask(){ out.textContent='Thinking...'; try{const d=await API.post('/api/support/chat',{message:q.value}); out.textContent=d.reply||'No reply.';}catch(e){out.textContent=e.message;} }
+async function escalate(){ out.textContent='Submitting...'; try{const d=await API.post('/api/support/escalate',{subject:(q.value||'Human support requested').slice(0,80),message:q.value}); out.textContent='Escalation created: ticket #'+d.ticket_id+'. Owner has been notified.'; loadTickets();}catch(e){out.textContent=e.message;} }
+async function loadTickets(){if(!S.me||S.me.role!=='client') return; const d=await API.get('/api/support/my-tickets'); S.rows=d.tickets||[]; tickets.innerHTML=S.rows.map(t=>`<div class="list-item ticket-row ${S.selected==t.id?'active':''}" onclick="openTicket(${t.id})"><div class="muted">#${t.id} · <span class="badge ${UI.esc(t.status)}">${UI.esc(t.status)}</span> · ${UI.fmt(t.updated_at||t.created_at)}</div><div><strong>${UI.esc(t.subject)}</strong></div><div class="muted">${UI.esc((t.last_message||'').slice(0,120))}</div></div>`).join('')||'<div class="muted">No escalations yet.</div>'; }
+async function openTicket(id){S.selected=id; threadWrap.classList.remove('hidden'); const d=await API.get('/api/support/my-tickets/'+id); threadTitle.textContent='Ticket #'+d.ticket.id+' — '+(d.ticket.subject||''); thread.innerHTML=(d.messages||[]).map(m=>`<div class="tmsg ${UI.esc(m.sender_role||'')}"><div class="muted" style="font-size:11px">${UI.esc(m.sender_name||m.sender_role)} · ${UI.fmt(m.created_at)}</div><div>${UI.esc(m.body||'')}</div></div>`).join('')||'<div class="muted">No messages.</div>'; thread.scrollTop=thread.scrollHeight; loadTickets(); }
+async function sendReply(){if(!S.selected) return; try{await API.post('/api/support/my-tickets/'+S.selected+'/reply',{message:reply.value}); reply.value=''; openTicket(S.selected);}catch(e){alert(e.message);} }
+init();
+</script></body></html>

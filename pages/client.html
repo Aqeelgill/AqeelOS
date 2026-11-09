@@ -1,0 +1,46 @@
+<!DOCTYPE html><html lang="en" data-theme="dark"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Client Portal | AqeelOS</title>
+<link rel="stylesheet" href="/static/vendor/fonts/inter.css"><link rel="stylesheet" href="/static/css/base.css">
+<style>.chat{height:300px;overflow:auto;border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--card2)} .msg{margin:8px 0;padding:10px 12px;border-radius:12px;max-width:92%;white-space:pre-wrap}.msg.user{margin-left:auto;background:rgba(0,212,255,.14)} .msg.bot{background:rgba(255,255,255,.04)} [data-theme="light"] .msg.bot{background:#eef2ff} .stage{font-size:12px;color:var(--muted)}</style></head>
+<body><div class="topbar"><div><strong>Client Portal</strong> <span id="who" class="muted"></span></div><div style="display:flex;gap:8px"><a class="btn" href="/support">Support</a><button class="btn" onclick="UI.toggleTheme()">Theme</button><button class="btn" onclick="logout()">Logout</button></div></div>
+<div class="container grid" style="gap:16px">
+  <div class="grid grid-2">
+    <div class="card" style="padding:18px"><h2 style="margin:0 0 8px">Hire an Agent (CEO Bot)</h2><p class="muted">Public departments/agents only. Conversation is saved to your account.</p>
+      <div id="chat" class="chat"></div>
+      <div id="pending" class="notice warning hidden" style="margin-top:10px"></div>
+      <div style="display:flex;gap:8px;margin-top:10px"><input id="chatIn" class="input" placeholder="Describe what you need, or reply Confirm/Cancel"><button class="btn primary" onclick="sendChat()">Send</button></div>
+    </div>
+    <div class="card" style="padding:18px"><h2 style="margin:0 0 8px">Create Task</h2>
+      <label class="muted">Department</label><select id="dept" class="input"></select>
+      <label class="muted" style="margin-top:8px;display:block">Agent (public only)</label><select id="agent" class="input"></select>
+      <label class="muted" style="margin-top:8px;display:block">Task</label><textarea id="task" class="input" rows="4" placeholder="Describe the task"></textarea>
+      <button class="btn primary" style="margin-top:10px" onclick="createTask()">Submit Task</button>
+      <div id="taskMsg" class="notice muted" style="margin-top:10px">Status updates poll automatically.</div>
+    </div>
+  </div>
+  <div class="card" style="padding:18px"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">My Tasks</h2><button class="btn" onclick="load()">Refresh</button></div>
+    <div style="overflow:auto;margin-top:10px"><table class="table"><thead><tr><th>ID</th><th>Agent</th><th>Status</th><th>Stage</th><th>Task</th><th>Artifacts/Output</th></tr></thead><tbody id="tasks"></tbody></table></div>
+  </div>
+</div>
+<script src="/static/js/api.js"></script><script>
+let S={depts:[],agents:[],convId:null,pending:null};
+function addMsg(role,text){const d=document.createElement('div'); d.className='msg '+(role==='user'?'user':'bot'); d.textContent=text; chat.appendChild(d); chat.scrollTop=chat.scrollHeight;}
+function showPending(p){S.pending=p; if(!p){pending.classList.add('hidden'); pending.innerHTML=''; return;} pending.classList.remove('hidden'); pending.innerHTML=`<strong>Confirmation required</strong><div class="muted" style="margin:6px 0">Assign <b>${UI.esc(p.agent_name||p.agent_id)}</b>: ${UI.esc(p.task||'')}</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" onclick="confirmRoute()">Confirm & Create Task</button><button class="btn" onclick="cancelRoute()">Cancel</button></div>`;}
+async function guard(){const me=await API.get('/api/me'); if(me.role!=='client'){location.href='/login'; return false;} who.textContent='· '+(me.user?.name||me.user?.email||'Client'); return true;}
+async function loadHistory(){try{const h=await API.get('/api/ceo/history'); S.convId=h.conversation_id; chat.innerHTML=''; (h.messages||[]).forEach(m=>addMsg(m.sender_role==='client'?'user':'bot', m.body)); if(!(h.messages||[]).length) addMsg('bot','Hi, I am the AqeelOS CEO Bot. Tell me what you need and I can route it to a public team agent. I will ask for confirmation before creating a task.'); showPending(h.pending_route||null);}catch(e){addMsg('bot','Could not load chat history.');}}
+async function load(){const st=await API.get('/api/status'); S.depts=st.departments||[]; S.agents=Object.values(st.agents||{}); dept.innerHTML=S.depts.map(d=>`<option value="${UI.esc(d.id)}">${UI.esc(d.name)}</option>`).join(''); fillAgents(); await renderTasks(st.tasks||[]);}
+function fillAgents(){const id=dept.value; const a=S.agents.filter(x=>x.department_id===id); agent.innerHTML=a.map(x=>`<option value="${UI.esc(x.id)}">${UI.esc(x.name)} (${UI.esc(x.status)})</option>`).join('')||'<option>No agents</option>';}
+dept.onchange=fillAgents;
+async function taskStage(t){try{const d=await API.get('/api/tasks/'+t.id); const run=(d.runs||[])[0]; return run? (run.stage||run.status||'—') : (t.status||'—');}catch(e){return t.status||'—';}}
+async function renderTasks(rows){const out=[]; for(const t of rows.slice(0,60)){let arts=[]; try{arts=(await API.get('/api/tasks/'+t.id+'/artifacts')).artifacts||[]}catch(e){}
+  const stage=['queued','processing','busy'].includes(t.status)?await taskStage(t):'—';
+  const links=arts.map(a=>`<a class="btn" style="padding:4px 8px;margin:2px" href="/api/artifacts/${a.id}/download">${UI.esc(a.kind)}</a>`).join(' ');
+  const preview=t.output_text?`<details><summary>Output</summary><pre style="white-space:pre-wrap;margin:8px 0 0">${UI.esc((t.output_text||'').slice(0,3000))}</pre></details>`:(t.error_text?UI.esc(t.error_text):'—');
+  out.push(`<tr><td>#${t.id}</td><td>${UI.esc(t.agent_id)}</td><td><span class="badge ${UI.esc(t.status)}">${UI.esc(t.status)}</span></td><td class="stage">${UI.esc(stage)}</td><td>${UI.esc(t.task)}</td><td>${links||''}${preview}</td></tr>`);} 
+  tasks.innerHTML=out.join('')||'<tr><td colspan="6" class="muted">No tasks yet.</td></tr>';}
+async function createTask(){taskMsg.textContent='Submitting...'; try{const d=await API.post('/api/tasks',{agent_id:agent.value,task:task.value,source:'client_portal'}); task.value=''; taskMsg.textContent='Task #'+d.task.id+' queued.'; load();}catch(e){taskMsg.textContent=e.message;}}
+async function sendChat(){const t=chatIn.value.trim(); if(!t) return; chatIn.value=''; addMsg('user',t); try{const d=await API.post('/api/ceo/chat',{message:t,conversation_id:S.convId}); S.convId=d.conversation_id||S.convId; addMsg('bot',d.reply||'No response.'); showPending(d.pending_route||null); if(d.task) load();}catch(e){addMsg('bot','Error: '+e.message);} }
+async function confirmRoute(){if(!S.convId) return; try{const d=await API.post('/api/ceo/confirm',{conversation_id:S.convId}); addMsg('bot',d.reply||'Confirmed.'); showPending(null); load();}catch(e){addMsg('bot','Error: '+e.message);} }
+async function cancelRoute(){if(!S.convId) return; try{const d=await API.post('/api/ceo/cancel',{conversation_id:S.convId}); addMsg('bot',d.reply||'Cancelled.'); showPending(null);}catch(e){addMsg('bot','Error: '+e.message);} }
+async function logout(){await API.post('/api/auth/logout',{}); location.href='/';}
+(async()=>{if(!(await guard()))return; await loadHistory(); await load(); setInterval(load,4000);})();
+</script></body></html>
