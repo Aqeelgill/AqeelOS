@@ -47,12 +47,25 @@ def system():
     provider = LLM_PROVIDER
     ollama = ollama_health()
     groq = groq_health()
+    # ReportLab / Pillow availability for artifact rendering
+    try:
+        from reportlab.lib.pagesizes import A4  # noqa: F401
+        reportlab_available = True
+    except Exception:
+        reportlab_available = False
+    try:
+        from PIL import Image  # noqa: F401
+        pillow_available = True
+    except Exception:
+        pillow_available = False
     return jsonify({
         "ollama": ollama,
         "groq": groq,
         "provider": provider,
         "ollama_model": OLLAMA_MODEL,
         "groq_model_available": bool(GROQ_API_KEY),
+        "reportlab_available": reportlab_available,
+        "pillow_available": pillow_available,
         "time": now_iso(),
     })
 

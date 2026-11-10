@@ -99,6 +99,28 @@ def requeue_tasks(task_ids, actor_role='owner', actor_id=None):
     return out
 
 
+def retry_failed_tasks(task_ids, actor_role='owner', actor_id=None):
+    """Requeue failed tasks back to 'queued' for re-execution."""
+    ts = now_iso(); ids = [int(t) for t in (task_ids or [])]
+    if not ids: return []
+    q = f"SELECT * FROM tasks WHERE id IN ({','.join(['?']*len(ids))}) AND status='failed'"
+    rows = db_exec(q, tuple(ids), fetch=True)
+    out = []
+    for t in rows:
+        db_exec("UPDATE tasks SET status='queued', error_text=NULL, completed_at=NULL, output_text=NULL, updated_at=? WHERE id=?",
+                (ts, t['id']), commit=True)
+        db_exec("INSERT INTO task_runs(task_id,agent_id,status,stage,detail,started_at) VALUES (?,?,?,?,?,?)",
+                (t['id'], t['agent_id'], 'queued', 'queued', f'Retried by {actor_role}', ts), commit=True)
+        db_exec("UPDATE agents SET status='busy', current_task=?, last_active=? WHERE id=?",
+                (t['task'][:200], ts, t['agent_id']), commit=True)
+        add_activity(t['agent_id'], 'queued', f"Retried failed task #{t['id']} by owner", 'info', client_id=t.get('client_id'))
+        out.append(t['id'])
+    if out:
+        db_exec("INSERT INTO audit_log(actor_role,actor_id,action,details,created_at) VALUES (?,?,?,?,?)",
+                (actor_role, actor_id, 'tasks_retried', f'Retried failed tasks: {out}', ts), commit=True)
+    return out
+
+
 def get_control_status():
     counts = db_exec("""SELECT
         SUM(CASE WHEN status='queued' THEN 1 ELSE 0 END) queued,

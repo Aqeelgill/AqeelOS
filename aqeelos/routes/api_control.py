@@ -4,7 +4,7 @@ from aqeelos.auth import require_role
 from aqeelos.db import db_exec
 from aqeelos.models import get_agents, get_departments
 from aqeelos.services.execution_control import (
-    cancel_queued_tasks, get_control_status, pause_processing_tasks, requeue_tasks, set_state,
+    cancel_queued_tasks, get_control_status, pause_processing_tasks, requeue_tasks, retry_failed_tasks, set_state,
 )
 from aqeelos.services.task_queue import llm_health
 from aqeelos.validation import clean_text
@@ -99,6 +99,24 @@ def owner_requeue_tasks():
     ids = data.get('task_ids') or []
     requeued = requeue_tasks(ids, actor_role='owner')
     return jsonify({'ok': True, 'requeued_task_ids': requeued})
+
+
+@bp.post('/owner/control/tasks/retry')
+@require_role('owner')
+def owner_retry_tasks():
+    data = _json()
+    ids = data.get('task_ids') or []
+    retried = retry_failed_tasks(ids, actor_role='owner')
+    return jsonify({'ok': True, 'retried_task_ids': retried})
+
+
+@bp.post('/owner/control/tasks/<int:task_id>/retry')
+@require_role('owner')
+def owner_retry_one(task_id):
+    retried = retry_failed_tasks([task_id], actor_role='owner')
+    if not retried:
+        return jsonify({'ok': False, 'retried_task_ids': [], 'error': 'Task not found or not failed'}), 404
+    return jsonify({'ok': True, 'retried_task_ids': retried})
 
 
 @bp.post('/owner/control/tasks/<int:task_id>/cancel')
