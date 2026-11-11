@@ -187,7 +187,6 @@ def init_db():
             _add_column(conn, "tasks", "output_text TEXT")
             _add_column(conn, "tasks", "error_text TEXT")
             _add_column(conn, "tasks", "updated_at TEXT")
-            _add_column(conn, "conversations", "pending_route TEXT")
             _add_column(conn, "activity", "client_id INTEGER")
             _add_column(conn, "notifications", "user_id INTEGER")
             conn.executescript(
