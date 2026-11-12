@@ -2,7 +2,7 @@
 <link rel="stylesheet" href="/static/vendor/fonts/inter.css"><link rel="stylesheet" href="/static/css/base.css"></head>
 <body><div class="topbar"><a class="btn" href="/">Home</a><div><a class="btn" href="/register">Register</a> <button class="btn" onclick="UI.toggleTheme()">Theme</button></div></div>
 <div class="container" style="max-width:520px"><div class="card" style="padding:22px"><h1 style="margin-top:0">Client Login</h1><p class="muted">Sign in to access your portal, tasks, and outputs.</p>
-<form id="f" class="grid" style="gap:10px"><input class="input" name="email" type="email" placeholder="Email" required><input class="input" name="password" type="password" placeholder="Password" required><button class="btn primary" type="submit">Login</button></form>
+<form id="f" class="grid" style="gap:10px"><input class="input" name="email" type="email" placeholder="Email" required autocomplete="email"><input class="input" name="password" type="password" placeholder="Password" required autocomplete="current-password"><button class="btn primary" type="submit">Login</button></form>
 <div id="msg" class="notice muted" style="margin-top:12px">Use your registered client account.</div></div></div>
 <script src="/static/js/api.js"></script><script>
 f.onsubmit=async(e)=>{e.preventDefault(); msg.textContent='Signing in...'; try{const fd=new FormData(f); await API.post('/api/auth/login',{email:fd.get('email'),password:fd.get('password')}); location.href='/client';}catch(err){msg.textContent=err.message||'Login failed';}}
